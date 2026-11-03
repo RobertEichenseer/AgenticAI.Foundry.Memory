@@ -1,0 +1,58 @@
+    
+$resourceGroup = "MS.AI.Foundry.Memory.2"
+$location = "swedencentral"
+$projectName = "robeich-ms-ai-foundry-memory-2"
+$chatModelName = "gpt-4.1"
+$chatModelVersion = "2025-04-14"
+$embeddingModelName = "text-embedding-3-large"
+$embeddingModelVersion = "1"
+
+# Login to Azure
+az login
+
+$principalId = az ad signed-in-user show `
+    --query id `
+    --output tsv
+
+# Set subscription (if necessary)
+# az account set --subscription "<subscription-id>"
+
+# Create demo resource group
+az group create `
+  --name $resourceGroup `
+  --location $location 
+
+# Creates the project, model deployments, and role assignments.
+az deployment group create `
+    --name foundry-memory `
+    --resource-group $resourceGroup `
+    --template-file ".\setup\main.bicep" `
+    --parameters location=$location projectName=$projectName principalId=$principalId `
+        chatModelName=$chatModelName chatModelVersion=$chatModelVersion `
+        embeddingModelName=$embeddingModelName embeddingModelVersion=$embeddingModelVersion `
+    --query properties.outputs `
+    --output json
+
+# Retrieve the deployment outputs and save the sample configuration.
+$deploymentOutput = az deployment group show `
+    --name foundry-memory `
+    --resource-group $resourceGroup `
+    --query properties.outputs `
+    --output json
+
+$outputs = $deploymentOutput | ConvertFrom-Json -ErrorAction Stop
+$configLines = foreach ($name in @('FOUNDRY_PROJECT_ENDPOINT', 'CHAT_MODEL_DEPLOYMENT_NAME', 'EMBEDDING_MODEL_DEPLOYMENT_NAME')) {
+    $value = $outputs.$name.value
+    if ($value -isnot [string] -or [string]::IsNullOrWhiteSpace($value)) {
+        throw "Missing deployment output: $name. Configuration was not changed."
+    }
+    "$name=$value"
+}
+
+$configLines += @(
+    'MEMORY_SCOPE=2b4ca208-b58c-4e47-b3a5-70828e02be15'
+    'MEMORY_STORE_NAME=ComPref'
+)
+
+$configLines | Set-Content -LiteralPath ".\config\config.env" -Encoding utf8 -ErrorAction Stop
+Write-Host 'Saved deployment outputs to config\config.env. Allow a few minutes for RBAC propagation before running the sample.'

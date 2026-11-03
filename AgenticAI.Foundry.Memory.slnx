@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/agent_using_memory/agent_using_memory.csproj" />
+    <Project Path="src/set_memory/set_memory.csproj" />
+  </Folder>
+</Solution>
